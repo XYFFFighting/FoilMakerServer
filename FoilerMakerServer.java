@@ -1,6 +1,3 @@
-import com.sun.corba.se.impl.io.OutputStreamHook;
-import com.sun.corba.se.spi.activation.Server;
-
 import javax.swing.*;
 import java.io.*;
 import java.net.ServerSocket;
@@ -15,11 +12,11 @@ import java.util.Scanner;
 /**
  * Created by Yufei Xu on 11/20/2016.
  */
-public class FoilerMakerServer {
+public class FoilerMakerServer{
     String instance[] = new String[3];
     static HashMap<String, String> user = new HashMap<String, String>();//username, password||after loggin, usertoken, username
-    static HashMap<String, Boolean> user1 = new HashMap<String, Boolean>();//username,loggin(in:false,not loggin:true)
-    static HashMap<String, Boolean> user2 = new HashMap<String, Boolean>();//usertoken,ingame(in:false,not in:true)
+    static HashMap<String, Boolean> user1 = new HashMap<String, Boolean>();//username,loggin(in:true,not loggin:false)
+    static HashMap<String, Boolean> user2 = new HashMap<String, Boolean>();//usertoken,ingame(in:true,not in:false)
     static HashMap<String, String> user3 = new HashMap<String, String>();//usertoken,key
     static HashMap<String, String> user4 = new HashMap<String, String>();//usertoken,score:fool:fooled
     static HashMap<String, String> Question = new HashMap<String, String>();//question, answer
@@ -37,8 +34,10 @@ public class FoilerMakerServer {
     static int quesnum=-1;
     static int serverPort;
     static boolean next=false;
-    static String rec = new String();
     static String send =new String();
+    static String infor = null;
+    static boolean startgame= false;
+    //static boolean allsuggestion=false;
 
     public static void main(String[] args) {
         FoilerMakerServer f = new FoilerMakerServer();
@@ -46,8 +45,8 @@ public class FoilerMakerServer {
         System.out.println("Please Enter the port number");
         serverPort = scanner.nextInt();
         try{
-            f.loadInformation();
             f.loadQuestion();
+            f.loadInformation();
             ssocket = new ServerSocket(serverPort);
             f.run();
         } catch (UnknownHostException e) {
@@ -58,246 +57,289 @@ public class FoilerMakerServer {
     }
 
 
-    public void run() throws IOException {
-        final Socket socket1 = ssocket.accept();
-                Socket socket = socket1;
-                System.out.println("Connected");
-                OutputStream out = socket.getOutputStream();
-                PrintWriter p = new PrintWriter(out,true);
-                BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+    public void run() {
+        Socket socket1 = null;
+        try {
+            socket1 = ssocket.accept();
+        }catch (IOException e1){
+        }
 
-                next=false;
-                while(next==false){
-                    rec = recieve(in);
-                    System.out.println(rec);
-                    Register(rec);
+        final Socket finalSocket = socket1;
+        SwingWorker worker = new SwingWorker() {
+            @Override
+            protected Object doInBackground() throws Exception {
+                try {
+                    String rec = new String();
+                    Socket socket = finalSocket;
+                    System.out.println("Connected");
+                    OutputStream out = socket.getOutputStream();
+                    final PrintWriter p = new PrintWriter(out, true);
+                    final BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
-                    System.out.println(send);
+                    next = false;
+                    while (next == false) {
+                        rec = recieve(in);
+                        Register(rec);
+                        p.println(send);
+                    }
+
+                    next = false;
+                    while(next==false){
+                        rec = recieve(in);
+                        StartNewGame(rec);
+                        p.println(send);
+                    }
+
+                    if(getMessage(rec,0).equals("STARTNEWGAME")) {
+                        SwingWorker worker = new SwingWorker() {
+                            @Override
+                            protected Object doInBackground() throws Exception {
+                                while(startgame == false) {
+                                    while (infor == null) {
+                                        System.out.print("");
+
+                                    }
+                                    System.out.println("infor change");
+                                    p.println(infor);
+                                    infor=null;
+
+
+                                }
+                                return null;
+                            }
+                        };
+                        worker.execute();
+                        next = false;
+                        while(next==false) {
+                            rec = recieve(in);
+                            LaunchGame(rec);
+                        }
+                        p.println(send);
+
+
+                    }
+                    if(getMessage(rec,0).equals("JOINGAME")){
+                        while(!getMessage(send,0).equals("NEWGAMEWORD")){
+                            System.out.print("");
+                        }
+                        p.println(send);
+                    }
+                    next=false;
+                    while(next==false){
+                        rec =recieve(in);
+                        CollectSuggestions(rec);
+                    }
+                   SendOptions();
                     p.println(send);
+
+
+
+
+
+                } catch (IOException e) {
+                    e.printStackTrace();
                 }
+                return null;
+            }
+        };
+        worker.execute();
+        run();
+
 
 
         //run();
 
-    }
+        }
 
-    public void Register(String s){
+    public void Register(String s) throws IOException {
         String com = getMessage(s,0);
         String username = getMessage(s,1);
         String password = getMessage(s,2);
-        String alph = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        String alph = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
         String under = "_";
         String num = "1234567890";
         String uppercase="ABCDEFGHIJKLMNOPQRSTUVWXYZ";
         String other = "#&$*";
-        boolean passvalid = true;
-        for(int i = 0;i<password.length();i++){
-            if(alph.indexOf(password.charAt(i))==-1){
-                if(other.indexOf(password.charAt(i))==-1)
-                    passvalid = false;
-            }
-        }
-        boolean passhasUpper = false;
-        for(int i =0;i<password.length();i++){
-            if(uppercase.indexOf(password.charAt(i))!=-1)
-                passhasUpper = true;
-        }
-        boolean passhasnum = false;
-        for(int i =0;i<password.length();i++){
-            if(num.indexOf(password.charAt(i))!=-1)
-                passhasnum = true;
-        }
-        boolean uservalid=true;
-        for(int i =0;i<username.length();i++){
-            if(alph.indexOf(username.charAt(i))==-1){
-                if(under.indexOf(username.charAt(i))==-1)
-                uservalid=false;
-            }
 
-        }
-        if(!com.equals("CREATENEWUSER")||!com.equals("LOGIN")){
+        if(!com.equals("CREATENEWUSER")&&!com.equals("LOGIN")){
             send = "RESPONSE--CREATENEWUSER--INVALIDMESSAGEFORMAT";
         }
         else if(com.equals("CREATENEWUSER")) {
-         if (username.length() == 0 || username.length() > 10 || uservalid) {
+            boolean passvalid = true;
+            for(int i = 0;i<password.length();i++){
+                if(alph.indexOf(password.charAt(i))==-1){
+                    if(other.indexOf(password.charAt(i))==-1)
+                        passvalid = false;
+                }
+            }
+            boolean passhasUpper = false;
+            for(int i =0;i<password.length();i++){
+                if(uppercase.indexOf(password.charAt(i))!=-1)
+                    passhasUpper = true;
+            }
+            boolean passhasnum = false;
+            for(int i =0;i<password.length();i++){
+                if(num.indexOf(password.charAt(i))!=-1)
+                    passhasnum = true;
+            }
+            boolean uservalid=true;
+            for(int i =0;i<username.length();i++){
+                if(alph.indexOf(username.charAt(i))==-1){
+                    if(under.indexOf(username.charAt(i))==-1)
+                        uservalid=false;
+                }
+
+            }
+         if (username.length() == 0 || username.length() > 10 || uservalid==false) {
                 send = "RESPONSE--CREATENEWUSER--INVALIDUSERNAME";
-            } else if (password.length() == 0 || password.length() > 10 || passhasnum || passhasUpper || passvalid)
-                send = "RESPONSE--CREATENEWUSER--INVALIDUSERPASSWORD";
+            } else if (password.length() == 0 || password.length() > 10 || passhasnum==false || passhasUpper==false || passvalid==false) {
+             send = "RESPONSE--CREATENEWUSER--INVALIDUSERPASSWORD";
+             System.out.println(passhasnum+""+passhasUpper+""+passvalid);
+         }
             else if (user.containsKey(username))
                 send = "RESPONSE--CREATENEWUSER--USERALREADYEXISTS";
             else {
                 send = "RESPONSE--CREATENEWUSER--SUCCESS";
+
+             write(username,password);
+             loadInformation();
             }
         }
         else if(com.equals("LOGIN")){
-            if(user.containsKey(username))
-                send = "RESPONSE--CREATENEWUSER--UNKNOWNUSER";
-            else if(user.containsValue(password))
-                send = "RESPONSE--CREATENEWUSER--INVALIDUSERPASSWORD";
-            else if(user1.get(username))
-                send = "RESPONSE--CREATENEWUSER--USERALREADYLOGGEDIN";
+
+            if(user.containsKey(" "+username)) {
+                System.out.println(username);
+                System.out.println(user);
+                send = "RESPONSE--LOGIN--UNKNOWNUSER";
+            }
+            else if(user.containsValue(" "+password))
+                send = "RESPONSE--LOGIN--INVALIDUSERPASSWORD";
+            else if(user1.get(username)) {
+                send = "RESPONSE--LOGIN--USERALREADYLOGGEDIN";
+
+            }
             else{
                 next=true;
                 usertoken = usertoken();
                 user.remove(username);
                 user.put(usertoken,username);
                 user1.remove(username);
-                user1.put(username,false);
-                user2.put(usertoken,true);
-                send = "RESPONSE--CREATENEWUSER--SUCCESS--"+usertoken;
+
+                user1.put(username,true);
+                user2.put(usertoken,false);
+                send = "RESPONSE--LOGIN--SUCCESS--"+usertoken;
             }
 
         }
-        System.out.println(send);
+
 
 
 
 
     }
-/*
-    public void login(String s){
-        String com = getMessage(s,1);
-        String username = getMessage(s,2);
-        String password = getMessage(s,3);
-        if(!com.equals("LOGIN")){
-            send = "RESPONSE--CREATENEWUSER--INVALIDMESSAGEFORMAT";
-        }
-        else if(user.containsKey(username))
-            send = "RESPONSE--CREATENEWUSER--UNKNOWNUSER";
-        else if(user.containsValue(password))
-            send = "RESPONSE--CREATENEWUSER--INVALIDUSERPASSWORD";
-        else if(user1.get(username))
-            send = "RESPONSE--CREATENEWUSER--USERALREADYLOGGEDIN";
-        else{
-            next=true;
-            usertoken = usertoken();
-            user.remove(username);
-            user.put(usertoken,username);
-            user1.remove(username);
-            user1.put(username,false);
-            user2.put(usertoken,true);
-            send = "RESPONSE--CREATENEWUSER--SUCCESS--"+usertoken;
+    public void StartNewGame(String s) {
+        String com = getMessage(s, 0);
+        String token = getMessage(s, 1);
+        if (com.equals("STARTNEWGAME")) {
+            if (user2.containsKey(" "+token))
+                send = "RESPONSE--STARTNEWGAME--USERNOTLOGGEDIN";
+            else if (user2.get(token))
+                send = "RESPONSE--STARTNEWGAME--FAILURE";
+            else {
+                next=true;
+                user2.remove(token);
+                user2.put(token, true);
+                String key = key();
+                user3.put(token, key);
+                send = "RESPONSE--STARTNEWGAME--SUCCESS--" + key;
+            }
+
         }
 
-    }
-    */
-    /*
-
-    public void StartNewGame(String s){
-        String com = getMessage(s,1);
-        String token = getMessage(s,2);
-        String send;
-        if(user2.containsKey(token))
-            send = "RESPONSE--STARTNEWGAME--USERNOTLOGGEDIN";
-        else if(user2.get(token))
-            send = "RESPONSE--STARTNEWGAME--FAILURE";
-        else{
-            user2.remove(token);
-            user2.put(token,false);
-            String key = key();
-            user3.put(token,key);
-            send = "RESPONSE--STARTNEWGAME--SUCCESS--"+key;
-        }
-        try {
-            send(send);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-
-    //how to send to another client
-    public void JoinGame(String s){
-        String com = getMessage(s,1);
-        String token = getMessage(s,2);
-        String key = getMessage(s,3);
-        String send;
-        if(user2.containsKey(token)) {
-            send = "RESPONSE--JOINGAME--USERNOTLOGGEDIN--" + token;
-            try {
-                send(send);
-            } catch (IOException e) {
-                e.printStackTrace();
+        if(com.equals("JOINGAME")) {
+            token = getMessage(s,1);
+            String key = getMessage(s, 2);
+            if (user2.containsKey(" "+token)) {
+                send = "RESPONSE--JOINGAME--USERNOTLOGGEDIN--" + token;
             }
-        }
-        if(user3.containsValue(key)) {
-            send = "RESPONSE--JOINGAME--GAMEKEYNOTFOUND--" + token;
-            try {
-                send(send);
-            } catch (IOException e) {
-                e.printStackTrace();
+            if (user3.containsValue(key)) {
+                send = "RESPONSE--JOINGAME--GAMEKEYNOTFOUND--" + token;
             }
-        }
-        if(user2.get(token)) {
-            send = "RESPONSE--JOINGAME--FAILURE--" + token;
-            try {
-                send(send);
-            } catch (IOException e) {
-                e.printStackTrace();
+            if (user2.get(token)) {
+                send = "RESPONSE--JOINGAME--FAILURE--" + token;
+            } else {
+                next=true;
+                send = "RESPONSE--JOINGAME--SUCCESS--" + key;
+                String name = user.get(token);
+                user2.remove(token);
+                user2.put(token,true);
+                infor = user4.get(name);
+                int score = getScore(infor);
+                infor = "NEWPARTICIPANT--" + name + "--" + score;
             }
-        }
-        else{
-            send = "RESPONSE--JOINGAME--SUCCESS--"+token;
-            String name=user.get(token);
-            String infor = user4.get(name);
-            int score=getScore(infor);
-            infor="NEWPARTICIPANT--"+name+"--"+score;
-            try {
-                send(send);
-                send(infor);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            System.out.println(infor);
         }
 
     }
     public void LaunchGame(String s){
         quesnum++;
-        String com=getMessage(s,1);
-        String token = getMessage(s,2);
-        String key = getMessage(s,3);
-        String send;
-        if(user.containsKey(token))
+        String com=getMessage(s,0);
+        String token = getMessage(s,1);
+        String key = getMessage(s,2);
+        if(user.containsKey(" "+token)) {
             send = "RESPONSE---ALLPARTICIPANTSHAVEJOINED--USERNOTLOGGEDIN";
-        else if(user3.containsValue(key))
+        }
+        else if(user3.containsValue(" "+key)) {
             send = "RESPONSE---ALLPARTICIPANTSHAVEJOINED--INVALIDGAMETOKEN";
-        else if(user2.get(token))
+        }
+        else if(user2.get(token)==false) {
             send = "RESPONSE---ALLPARTICIPANTSHAVEJOINED--USERNOTGAMELEADER";
+        }
         else{
             try {
+                next =true;
+                startgame=true;
                 loadInformation();
                 wenti = ques[quesnum];
                 send = "NEWGAMEWORD--"+ques[quesnum]+"--"+Question.get(ques[quesnum]);
-                send(send);
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
+        System.out.println(send);
     }
+
 
     public void CollectSuggestions(String s)throws IOException{
-        String com = getMessage(s,1);
-        String token = getMessage(s,2);
-        String key = getMessage(s,3);
-        String suggestion = getMessage(s,4);
-        String send;
-        if(user.containsKey(token)) {
+        String com = getMessage(s,0);
+        String token = getMessage(s,1);
+        String key = getMessage(s,2);
+        String suggestion = getMessage(s,3);
+
+        if(user.containsKey(" "+token)) {
+            //System.out.println("2");
             send = "RESPONSE--PLAYERSUGGESTION--USERNOTLOGGEDIN";
-            send(send);
         }
-        else if(user3.containsValue(key)){
+        else if(user3.containsValue(" "+key)){
+            //System.out.println("3");
             send = "RESPONSE--PLAYERSUGGESTION--INVALIDGAMETOKEN";
-            send(send);
         }
         else if(!com.equals("PLAYERSUGGESTION")){
+            //System.out.println("4");
             send = "RESPONSE--PLAYERSUGGESTION--INVALIDMESSAGEFORMAT";
-            send(send);
         }
         else{
-            Suggestion.put(wenti,suggestion);
+            //System.out.println("1");
+            Suggestion.put(token,suggestion);
+            while(user2.size()!=Suggestion.size()){
+                System.out.print("");
+            }
+            next=true;
+
         }
 
     }
+
 
     public void SendOptions(){
         Collection<String> s =Suggestion.values();
@@ -306,20 +348,16 @@ public class FoilerMakerServer {
         for(int i=0;i<a.length;i++){
             suggestion[i]=a[i].toString();
         }
-        String send = "ROUNDOPTIONS";
+        send = "ROUNDOPTIONS";
         for(int i=0;i<suggestion.length;i++){
             send = send + "--"+suggestion[i];
         }
+        send = send+"--"+Question.get(ques[quesnum]);
 
-        try{
-            send(send);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
 
 
     }
-*/
+
 
 
 
@@ -328,33 +366,36 @@ public class FoilerMakerServer {
         BufferedReader br = new BufferedReader(new FileReader(f));
         String line = new String();
         int i = 0;
-        while((line = br.readLine())!=null){
-            int a =line.indexOf(":");
+        while((line = br.readLine())!=null) {
+            int a = line.indexOf(":");
             int b = line.length();
-            String name = line.substring(0,a);
-            String left = line.substring(a+1,b);
+            String name = line.substring(0, a);
+            String left = line.substring(a + 1, b);
             a = left.indexOf(":");
             b = left.length();
-            String password = left.substring(0,a);
-            left = left.substring(a+1,b);
+            String password = left.substring(0, a);
+            left = left.substring(a + 1, b);
             String value[][] = new String[1][2];
-            value[0][0]= password;
-            value[0][1]= left;
+            value[0][0] = password;
+            value[0][1] = left;
             user.put(name,password);
-            user1.put(name,true);
+            user1.put(name,false);
             user4.put(name,left);
         }
 
-    }
-    private void write(String user1,String pass) throws FileNotFoundException {
-        FileOutputStream out = new FileOutputStream(f);
-        PrintWriter p = new PrintWriter(out);
-        user.put(user1,pass);
-        p.println(user1+":"+pass+":0:0:0");
-
-
 
     }
+    private void write(String user1,String pass) throws IOException {
+        FileWriter fw = new FileWriter(f,true);
+        BufferedWriter out = new BufferedWriter(fw);
+        String a=user1 + ":" + pass + ":0:0:0";
+        out.newLine();
+        out.write(a);
+        out.close();
+        fw.close();
+    }
+
+
     private void loadQuestion()throws IOException {
         BufferedReader br = new BufferedReader(new FileReader(W));
         String line = new String();
