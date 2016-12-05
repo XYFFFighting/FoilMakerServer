@@ -4,7 +4,6 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
-import java.nio.Buffer;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Scanner;
@@ -13,14 +12,17 @@ import java.util.Scanner;
  * Created by Yufei Xu on 11/20/2016.
  */
 public class FoilerMakerServer{
-    String instance[] = new String[3];
     static HashMap<String, String> user = new HashMap<String, String>();//username, password||after loggin, usertoken, username
     static HashMap<String, Boolean> user1 = new HashMap<String, Boolean>();//username,loggin(in:true,not loggin:false)
     static HashMap<String, Boolean> user2 = new HashMap<String, Boolean>();//usertoken,ingame(in:true,not in:false)
     static HashMap<String, String> user3 = new HashMap<String, String>();//usertoken,key
     static HashMap<String, String> user4 = new HashMap<String, String>();//usertoken,score:fool:fooled
     static HashMap<String, String> Question = new HashMap<String, String>();//question, answer
-    static HashMap<String, String> Suggestion = new HashMap<String, String>();//quetiong,suggestion
+    static HashMap<String, String> Suggestion = new HashMap<String, String>();//token,suggestion
+    static HashMap<String, String> Suggestion1 = new HashMap<String, String>();//suggestion,token
+    static HashMap<String, String> Choice  = new HashMap<String, String>();//token, choice
+    static HashMap<String, String> Choice1 = new HashMap<String, String>();//choice, token
+    static HashMap<String, String> Reply = new HashMap<String, String>();
     static String[] ques = new String[10];
     static String wenti = new String();
     File f = new File("UserDatabase");
@@ -33,6 +35,7 @@ public class FoilerMakerServer{
     static String usertoken =new String();
     static int quesnum=-1;
     static int serverPort;
+    static int finish=0;
     static boolean next=false;
     static String send =new String();
     static String infor = null;
@@ -99,7 +102,7 @@ public class FoilerMakerServer{
                                         System.out.print("");
 
                                     }
-                                    System.out.println("infor change");
+                                    System.out.println(infor);
                                     p.println(infor);
                                     infor=null;
 
@@ -113,27 +116,69 @@ public class FoilerMakerServer{
                         while(next==false) {
                             rec = recieve(in);
                             LaunchGame(rec);
+
                         }
-                        p.println(send);
-
-
                     }
                     if(getMessage(rec,0).equals("JOINGAME")){
                         while(!getMessage(send,0).equals("NEWGAMEWORD")){
                             System.out.print("");
                         }
-                        p.println(send);
                     }
+                    int quesnumber=0;
+                    while(quesnum<Question.size()){
+                        finish=0;
+                        quesnum=quesnumber;
+                    sendQuestion();
+                    p.println(send);
+
                     next=false;
                     while(next==false){
                         rec =recieve(in);
                         CollectSuggestions(rec);
+
+
                     }
-                   SendOptions();
+
+                    SendOptions();
                     p.println(send);
 
+                    next=false;
+                    while(next==false){
+                        rec = recieve(in);
+                        CollectChoice(rec);
+                        if(next==false) {
+                            p.println(send);
+                        }
+                    }
+                    next=false;
+                    send="";
+                    while(next==false) {
+                        makeReply(rec);
+                    }
+                    send = "ROUNDRESULT";
 
+                    Collection<String> c  = Reply.values();
+                    Object[] a = c.toArray();
+                    String d[] = new String[a.length];
+                    for(int i=0;i<a.length;i++){
+                        d[i]=a[i].toString();
+                    }
 
+                    for(int i=0;i<d.length;i++){
+                        send = send+d[i];
+                    }
+                    finish++;
+                    while(finish!=user2.size()){
+                        System.out.print("");
+                    }
+                    p.println(send);
+Suggestion.clear();
+                        Suggestion1.clear();
+                        quesnumber++;
+                        quesnum=quesnumber;
+                    }
+                    send ="GAMEOVER";
+                    p.println(send);
 
 
                 } catch (IOException e) {
@@ -212,8 +257,10 @@ public class FoilerMakerServer{
                 System.out.println(user);
                 send = "RESPONSE--LOGIN--UNKNOWNUSER";
             }
-            else if(user.containsValue(" "+password))
+            else if(user.containsValue(password)==false) {
+                System.out.println(user);
                 send = "RESPONSE--LOGIN--INVALIDUSERPASSWORD";
+            }
             else if(user1.get(username)) {
                 send = "RESPONSE--LOGIN--USERALREADYLOGGEDIN";
 
@@ -229,6 +276,7 @@ public class FoilerMakerServer{
                 user2.put(usertoken,false);
                 send = "RESPONSE--LOGIN--SUCCESS--"+usertoken;
             }
+            System.out.println(send);
 
         }
 
@@ -277,12 +325,11 @@ public class FoilerMakerServer{
                 int score = getScore(infor);
                 infor = "NEWPARTICIPANT--" + name + "--" + score;
             }
-            System.out.println(infor);
         }
 
     }
     public void LaunchGame(String s){
-        quesnum++;
+
         String com=getMessage(s,0);
         String token = getMessage(s,1);
         String key = getMessage(s,2);
@@ -292,21 +339,25 @@ public class FoilerMakerServer{
         else if(user3.containsValue(" "+key)) {
             send = "RESPONSE---ALLPARTICIPANTSHAVEJOINED--INVALIDGAMETOKEN";
         }
-        else if(user2.get(token)==false) {
+        else if(user3.containsKey(" "+token)) {
             send = "RESPONSE---ALLPARTICIPANTSHAVEJOINED--USERNOTGAMELEADER";
         }
         else{
             try {
+
                 next =true;
                 startgame=true;
                 loadInformation();
-                wenti = ques[quesnum];
-                send = "NEWGAMEWORD--"+ques[quesnum]+"--"+Question.get(ques[quesnum]);
+
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
-        System.out.println(send);
+
+    }
+    public void sendQuestion(){
+        wenti = ques[quesnum];
+        send = "NEWGAMEWORD--"+ques[quesnum]+"--"+Question.get(ques[quesnum]);
     }
 
 
@@ -316,21 +367,23 @@ public class FoilerMakerServer{
         String key = getMessage(s,2);
         String suggestion = getMessage(s,3);
 
+
         if(user.containsKey(" "+token)) {
-            //System.out.println("2");
+
             send = "RESPONSE--PLAYERSUGGESTION--USERNOTLOGGEDIN";
         }
         else if(user3.containsValue(" "+key)){
-            //System.out.println("3");
+
             send = "RESPONSE--PLAYERSUGGESTION--INVALIDGAMETOKEN";
         }
         else if(!com.equals("PLAYERSUGGESTION")){
-            //System.out.println("4");
+
             send = "RESPONSE--PLAYERSUGGESTION--INVALIDMESSAGEFORMAT";
         }
         else{
-            //System.out.println("1");
+
             Suggestion.put(token,suggestion);
+            Suggestion1.put(suggestion,token);
             while(user2.size()!=Suggestion.size()){
                 System.out.print("");
             }
@@ -339,8 +392,6 @@ public class FoilerMakerServer{
         }
 
     }
-
-
     public void SendOptions(){
         Collection<String> s =Suggestion.values();
         Object[] a = s.toArray();
@@ -354,8 +405,70 @@ public class FoilerMakerServer{
         }
         send = send+"--"+Question.get(ques[quesnum]);
 
+    }
+    public void CollectChoice(String s){
+        String com = getMessage(s,0);
+        String token = getMessage(s,1);
+        String key = getMessage(s,2);
+        String choice = getMessage(s,3);
+        String name = user.get(token);
+
+        if(user.containsKey(" "+token)) {
+            send = "RESPONSE--PLAYERCHOICE--USERNOTLOGGEDIN";
+        }
+        else if(user3.containsValue(" "+key)){
+            send = "RESPONSE--PLAYERCHOICE--INVALIDGAMETOKEN";
+        }
+        else if(!com.equals("PLAYERCHOICE")){
+            send = "RESPONSE--PLAYERCHOICE--INVALIDMESSAGEFORMAT";
+        }
+        else{
+
+Choice.put(token,choice);
+            Choice1.put(choice,token);
+            next=true;
+        }
+
+    }
+    public void makeReply(String s) {
+        String token = getMessage(s, 1);
+        String name = user.get(token);
+        String infor1 = user4.get(name);
+        String choice = getMessage(s,3);
+        int score = getScore(infor1);
+        int fool = getFooltimes(infor1);
+        int fooled = getFooledtimes(infor1);
+        if (Choice.get(token).equals(Question.get(ques[quesnum]))) {
+            if (Choice1.containsKey(Suggestion.get(token))) {
+                fool++;
+                score += 5;
+                score += 10;
+                send = send + "--" + name + "--"+ "You got it right! You fooled " + user.get(Choice1.get(Suggestion.get(token))) + "--" + score + "--" + fool + "--" + fooled;
+
+            } else {
+                score += 10;
+                send = send + "--" + name + "--"+ "You got it right!" + "--" + score + "--" + fool + "--" + fooled;
+            }
+        } else if (!Choice.get(token).equals(Suggestion.get(token))) {
+            send = send + "--" + name + "--"+ "" + "--" + score + "--" + fool + "--" + fooled;
+        } else {
+            if (Choice1.containsKey(Suggestion.get(token))) {
+                fooled++;
+                fool++;
+                score += 5;
+                send = send + "--" + name + "--"+ "You were fooled by "+user.get(Suggestion1.get(choice)) + "You fooled " + user.get(Choice1.get(Suggestion.get(token))) + "--" + score + "--" + fool + "--" + fooled;
+            }
+            else{
+
+                fooled++;
+                send = send +"--"+name+ "--"+" You were fooled by "+user.get(Suggestion1.get(choice))+"--"+score+"--"+fool+"--"+fooled;
+            }
 
 
+        }
+        System.out.println(send);
+        Reply.put(token,send);
+        next=true;
     }
 
 
@@ -464,7 +577,8 @@ public class FoilerMakerServer{
 
     private int getFooltimes(String s){
         int a = s.indexOf(":");
-        String b = s.substring(0,a);
+        int d = s.length();
+        String b = s.substring(a+1,d);
         a = b.indexOf(":");
         int c = Integer.parseInt(b.substring(0,a));
         return c;
@@ -472,10 +586,10 @@ public class FoilerMakerServer{
 
     private int getFooledtimes(String s){
         int a = s.indexOf(":");
-        String b = s.substring(0,a);
+        int d = s.length();
+        String b = s.substring(a+1,d);
         a = b.indexOf(":");
-        b = b.substring(0,a);
-        a = b.indexOf(":");
+        b = b.substring(a+1,b.length());
         int c = Integer.parseInt(b.substring(0,a));
         return c;
     }
