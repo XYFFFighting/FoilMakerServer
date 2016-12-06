@@ -246,7 +246,7 @@ Suggestion.clear();
             else {
                 send = "RESPONSE--CREATENEWUSER--SUCCESS";
 
-             write(username,password);
+             write(username,password,0,0,0);
              loadInformation();
             }
         }
@@ -430,11 +430,12 @@ Choice.put(token,choice);
         }
 
     }
-    public void makeReply(String s) {
+    public void makeReply(String s) throws IOException {
         String token = getMessage(s, 1);
         String name = user.get(token);
         String infor1 = user4.get(name);
         String choice = getMessage(s,3);
+        String pass=user.get(token);
         int score = getScore(infor1);
         int fool = getFooltimes(infor1);
         int fooled = getFooledtimes(infor1);
@@ -466,6 +467,7 @@ Choice.put(token,choice);
 
 
         }
+        write(name,pass,score,fool,fooled);
         System.out.println(send);
         Reply.put(token,send);
         next=true;
@@ -498,10 +500,10 @@ Choice.put(token,choice);
 
 
     }
-    private void write(String user1,String pass) throws IOException {
+    private void write(String user1,String pass, int d, int b,int c) throws IOException {
         FileWriter fw = new FileWriter(f,true);
         BufferedWriter out = new BufferedWriter(fw);
-        String a=user1 + ":" + pass + ":0:0:0";
+        String a=user1 + ":" + pass + ":"+d+":"+b+":"+c;
         out.newLine();
         out.write(a);
         out.close();
